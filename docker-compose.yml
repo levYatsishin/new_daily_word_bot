@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  bot:
+    build: .
+    container_name: telegram_word_bot
+    restart: unless-stopped
+    volumes:
+      - ./words.txt:/app/words.txt
+      - ./users.json:/app/users.json
+    environment:
+      - TZ=UTC 

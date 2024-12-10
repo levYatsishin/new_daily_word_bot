@@ -4,6 +4,9 @@ venv/
 # Environment variables
 .env
 
+# User data
+users.json
+
 # Python
 __pycache__/
 *.py[cod]
@@ -17,3 +20,7 @@ __pycache__/
 
 # Logs
 *.log 
+
+# Docker
+.docker/
+docker-compose.override.yml 
