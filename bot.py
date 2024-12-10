@@ -310,6 +310,58 @@ async def remove_list(message: types.Message, command: CommandObject):
     save_users(active_users, user_lists)
     await message.reply(f"Removed '{list_name}' from your active lists!")
 
+@dp.message(Command('list'))
+async def show_list_words(message: types.Message, command: CommandObject):
+    """Show words in a specified list or user's active lists"""
+    user_id = message.from_user.id
+    
+    # If list name provided, show that specific list
+    if command.args:
+        list_name = command.args.strip().lower()
+        available_lists = get_available_wordlists()
+        
+        if list_name not in available_lists:
+            lists = ", ".join(available_lists)
+            await message.reply(
+                f"Word list '{list_name}' not found!\n"
+                f"Available lists: {lists}"
+            )
+            return
+            
+        try:
+            words = load_words(list_name)
+            words_text = "\n".join(f"• {word}" for word in sorted(words))
+            
+            # Split message if it's too long
+            if len(words_text) > 4000:
+                await message.reply(f"📚 Words in '{list_name}' (showing first 100):\n\n" + 
+                                  "\n".join(f"• {word}" for word in sorted(words)[:100]) +
+                                  "\n\n(List truncated due to length)")
+            else:
+                await message.reply(f"📚 Words in '{list_name}':\n\n{words_text}")
+                
+        except Exception as e:
+            logging.error(f"Error showing word list: {e}")
+            await message.reply("Error loading word list!")
+            
+    # If no list specified, show words from user's active lists
+    else:
+        if user_id not in user_lists:
+            await message.reply("You're not subscribed! Use /start first.")
+            return
+            
+        selected_lists = user_lists.get(user_id, [DEFAULT_WORDLIST])
+        for list_name in selected_lists:
+            try:
+                words = load_words(list_name)
+                words_text = "\n".join(f"• {word}" for word in sorted(words[:20]))
+                await message.reply(
+                    f"📚 Sample words from '{list_name}' (first 20):\n\n{words_text}\n\n"
+                    f"Use /list {list_name} to see full list"
+                )
+            except Exception as e:
+                logging.error(f"Error showing word list '{list_name}': {e}")
+
 @dp.message()
 async def handle_any_message(message: types.Message):
     """Handle any unrecognized message or command"""
