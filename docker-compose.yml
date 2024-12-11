@@ -7,10 +7,7 @@ services:
     restart: unless-stopped
     volumes:
       - ./wordlists:/app/wordlists
-      - type: bind
-        source: ./users.json
-        target: /app/users.json
-        create_host_path: true
+      - ./users.json:/app/users.json
       - ./.env:/app/.env
     environment:
       - TZ=UTC
