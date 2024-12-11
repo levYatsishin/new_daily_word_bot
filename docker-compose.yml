@@ -11,6 +11,7 @@ services:
         source: ./users.json
         target: /app/users.json
         create_host_path: true
+      - ./.env:/app/.env
     environment:
       - TZ=UTC
       - BOT_TOKEN=${BOT_TOKEN}
