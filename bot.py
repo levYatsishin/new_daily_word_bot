@@ -66,6 +66,10 @@ def load_users():
             for user_id, lists in data.get('user_lists', {}).items():
                 user_lists[int(user_id)] = lists
 
+            # Debug print
+            print(f"Loaded users: {users}")
+            print(f"Loaded user_lists: {user_lists}")
+            
             return users, user_lists
     except FileNotFoundError:
         logging.warning("users.json not found, creating new file")
@@ -78,22 +82,35 @@ def load_users():
 def save_users(users, user_lists):
     """Save users to users.json file"""
     try:
+        # Convert user IDs to strings for JSON serialization
         serializable_users = {
             str(user_id): user_time.isoformat() if user_time else None
             for user_id, user_time in users.items()
         }
         
+        # Convert user IDs to strings for user lists
         serializable_lists = {
             str(user_id): lists
             for user_id, lists in user_lists.items()
         }
         
+        data = {
+            'active_users': serializable_users,
+            'user_lists': serializable_lists,
+            'version': 2
+        }
+        
+        # Debug print before saving
+        print(f"About to save data: {data}")
+        
         with open('users.json', 'w') as file:
-            json.dump({
-                'active_users': serializable_users,
-                'user_lists': serializable_lists,
-                'version': 2
-            }, file, indent=4)
+            json.dump(data, file, indent=4)
+            
+        # Verify the save
+        with open('users.json', 'r') as file:
+            saved_data = json.load(file)
+            print(f"Verified saved data: {saved_data}")
+            
         return True
     except Exception as e:
         logging.error(f"Error saving users.json: {e}")
@@ -183,9 +200,21 @@ async def skip_word(message: types.Message):
 @dp.message(Command('start'))
 async def send_welcome(message: types.Message):
     user_id = message.from_user.id
-    active_users[user_id] = None
-    user_lists[user_id] = [DEFAULT_WORDLIST]
-    save_users(active_users, user_lists)
+    
+    print(f"Start command received. Current user_lists: {user_lists}")  # Debug print
+    print(f"User {user_id} exists in lists: {user_id in user_lists}")  # Debug print
+    
+    # Only initialize if user doesn't exist in either dictionary
+    if user_id not in user_lists:
+        print(f"New user {user_id}, initializing with default list")  # Debug print
+        user_lists[user_id] = [DEFAULT_WORDLIST]
+        active_users[user_id] = None
+        save_users(active_users, user_lists)
+    else:
+        print(f"Existing user {user_id}, preserving lists: {user_lists[user_id]}")  # Debug print
+        # Just update active status
+        active_users[user_id] = None
+        save_users(active_users, user_lists)
     
     await message.reply(
         "Hello! I'm your Daily Word Bot. 📚\n"
@@ -256,33 +285,42 @@ async def show_my_lists(message: types.Message):
 async def add_list(message: types.Message, command: CommandObject):
     """Add a word list to user's active lists"""
     user_id = message.from_user.id
-    if user_id not in active_users and user_id not in user_lists:
-        await message.reply("You're not subscribed! Use /start first.")
-        return
-    
-    if not command.args:
-        await message.reply("Please provide a list name.\nUsage: /addlist <name>")
-        return
-    
-    list_name = command.args.strip().lower()
     available_lists = get_available_wordlists()
     
-    if list_name not in available_lists:
-        lists = ", ".join(available_lists)
+    # If no list name provided, show available lists
+    if not command.args:
+        user_active_lists = user_lists.get(user_id, [DEFAULT_WORDLIST])
+        available_text = "\n".join(
+            f"• {lst}" + (" (active)" if lst in user_active_lists else "")
+            for lst in sorted(available_lists)
+        )
         await message.reply(
-            f"Word list '{list_name}' not found!\n"
-            f"Available lists: {lists}"
+            "Please provide a list name.\n"
+            f"Available lists:\n{available_text}\n\n"
+            "Usage: /addlist <name>"
         )
         return
     
-    user_lists.setdefault(user_id, [DEFAULT_WORDLIST])
-    if list_name in user_lists[user_id]:
-        await message.reply(f"List '{list_name}' is already active!")
+    list_name = command.args.strip().lower()
+    print(f"Adding list: {list_name}")  # Debug print
+    print(f"Available lists: {available_lists}")  # Debug print
+    
+    # Rest of the function remains the same...
+    if list_name not in available_lists:
+        await message.reply(f"List '{list_name}' not found! Available lists: {', '.join(available_lists)}")
         return
     
-    user_lists[user_id].append(list_name)
-    save_users(active_users, user_lists)
-    await message.reply(f"Added '{list_name}' to your active lists!")
+    if user_id not in user_lists:
+        user_lists[user_id] = [DEFAULT_WORDLIST]
+    
+    if list_name not in user_lists[user_id]:
+        user_lists[user_id].append(list_name)
+        save_success = save_users(active_users, user_lists)
+        print(f"Save success: {save_success}")  # Debug print
+        print(f"User lists after adding: {user_lists}")  # Debug print
+        await message.reply(f"Added '{list_name}' to your active lists!")
+    else:
+        await message.reply(f"List '{list_name}' is already in your active lists!")
 
 @dp.message(Command('remlist'))
 async def remove_list(message: types.Message, command: CommandObject):
