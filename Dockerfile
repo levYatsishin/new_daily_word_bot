@@ -8,8 +8,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy project files
 COPY bot.py .
-COPY words.txt .
-COPY users.json .
-COPY .env .
 
-CMD ["python", "bot.py"] 
+CMD ["python", "bot.py"]

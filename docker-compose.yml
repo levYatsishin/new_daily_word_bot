@@ -6,7 +6,11 @@ services:
     container_name: telegram_word_bot
     restart: unless-stopped
     volumes:
-      - ./words.txt:/app/words.txt
-      - ./users.json:/app/users.json
+      - ./wordlists:/app/wordlists
+      - type: bind
+        source: ./users.json
+        target: /app/users.json
+        create_host_path: true
     environment:
-      - TZ=UTC 
+      - TZ=UTC
+      - BOT_TOKEN=${BOT_TOKEN}
