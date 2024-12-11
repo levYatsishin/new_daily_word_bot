@@ -7,10 +7,6 @@ venv/
 # User data
 users.json
 
-# Word lists (except default)
-wordlists/*
-!wordlists/default.txt
-
 # Python
 __pycache__/
 *.py[cod]
