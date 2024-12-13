@@ -4,6 +4,7 @@ import random
 import json
 import os
 from datetime import datetime, timedelta
+import time
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command, CommandObject
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -42,10 +43,11 @@ def load_words(list_names=DEFAULT_WORDLIST):
         try:
             file_path = os.path.join(WORDLISTS_DIR, f"{list_name}.txt")
             with open(file_path, 'r', encoding='utf-8') as file:
-                list_words = [word.strip() for word in file.readlines() if word.strip()]
+                list_words = [word.strip() for word in file if word.strip()]
+                print(f"List words: {len(list_words)}")
                 if not list_words:
                     raise ValueError(f"Word list '{list_name}' is empty")
-                words.extend(list_words)  # Add words from this list to the total
+                words.extend(list_words)  # Add the list of words to the total without shuffling
         except FileNotFoundError:
             logging.error(f"Word list '{list_name}' not found!")
             if list_name != DEFAULT_WORDLIST:
@@ -140,7 +142,7 @@ async def should_send_word(user_id):
     
     now = datetime.now()
     print(f"Debug - now: {now}, last_time: {last_time}, SEND_INTERVAL: {SEND_INTERVAL}")
-    print(f"❗️❗️{(now - last_time) >= SEND_INTERVAL}")
+    print(f"{(now - last_time) >= SEND_INTERVAL}")
     return (now - last_time) >= SEND_INTERVAL
 
 async def send_word_to_user(user_id, force=False):
@@ -159,7 +161,7 @@ async def send_word_to_user(user_id, force=False):
     for list_name in selected_lists:
         try:
             word_list = load_words([list_name])
-            word = random.choice(word_list)
+            word = random.sample(word_list, 1)[0]
             
             await bot.send_message(
                 user_id,
@@ -173,7 +175,7 @@ async def send_word_to_user(user_id, force=False):
    
     if success:
         active_users[user_id] = current_time
-        print(f"❗️❗️❗️❗️❗️❗️{active_users[user_id]}")
+        print(f"{active_users[user_id]}")
         save_users(active_users, user_lists)
         
     return success

@@ -84,7 +84,7 @@ def parse_html_blocks(html):
 def fetch_and_parse_pages(base_url, page_count):
     all_parsed_data = []
     for page in range(1, page_count + 1):
-        url = f"{base_url}?page={page}"
+        url = f"{base_url}?page{page}"
         print(f"Fetching URL: {url}")
         time.sleep(2)  # Wait 2 seconds between requests to reduce suspicion
         html_page = fetch_html_from_url(url)
@@ -121,3 +121,4 @@ formatted_strings = format_blocks_to_strings(parsed_data)
 save_strings_to_file(formatted_strings, "output.txt")
 
 print("Formatted strings have been saved to output.txt")
+
