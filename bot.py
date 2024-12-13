@@ -23,7 +23,8 @@ dp = Dispatcher()
 
 # Constants
 WORDLISTS_DIR = "wordlists"
-DEFAULT_WORDLIST = "swear"
+DEFAULT_WORDLIST = ["swear", "fenia"] 
+SEND_INTERVAL = timedelta(hours=24)  # Define the interval for sending new messages
 
 def get_available_wordlists():
     """Get list of available word list files"""
@@ -34,21 +35,25 @@ def get_available_wordlists():
         logging.error(f"Error reading wordlists directory: {e}")
         return []
 
-def load_words(list_name=DEFAULT_WORDLIST):
-    """Load words from specified word list file"""
-    try:
-        file_path = os.path.join(WORDLISTS_DIR, f"{list_name}.txt")
-        with open(file_path, 'r', encoding='utf-8') as file:
-            words = [word.strip() for word in file.readlines() if word.strip()]
-            if not words:
-                raise ValueError("Word list is empty")
-            return words
-    except FileNotFoundError:
-        logging.error(f"Word list '{list_name}' not found!")
-        return load_words(DEFAULT_WORDLIST) if list_name != DEFAULT_WORDLIST else ["default_word"]
-    except Exception as e:
-        logging.error(f"Error reading word list '{list_name}': {e}")
-        return load_words(DEFAULT_WORDLIST) if list_name != DEFAULT_WORDLIST else ["default_word"]
+def load_words(list_names=DEFAULT_WORDLIST):
+    """Load words from specified word list files"""
+    words = []
+    for list_name in list_names:
+        try:
+            file_path = os.path.join(WORDLISTS_DIR, f"{list_name}.txt")
+            with open(file_path, 'r', encoding='utf-8') as file:
+                list_words = [word.strip() for word in file.readlines() if word.strip()]
+                if not list_words:
+                    raise ValueError(f"Word list '{list_name}' is empty")
+                words.extend(list_words)  # Add words from this list to the total
+        except FileNotFoundError:
+            logging.error(f"Word list '{list_name}' not found!")
+            if list_name != DEFAULT_WORDLIST:
+                continue  # Skip if it's not the default list
+        except Exception as e:
+            logging.error(f"Error reading word list '{list_name}': {e}")
+    
+    return words if words else ["default_word"]  # Return a default word if no words found
 
 def load_users():
     """Load users from users.json file"""
@@ -117,7 +122,11 @@ def save_users(users, user_lists):
         return False
 
 # Store active users with their last word times and list preferences
-active_users, user_lists = load_users()
+def load_active_users_and_lists():
+    active_users, user_lists = load_users()
+    return active_users, user_lists
+
+active_users, user_lists = load_active_users_and_lists()
 
 # Load default word list
 current_list_name = DEFAULT_WORDLIST
@@ -130,33 +139,26 @@ async def should_send_word(user_id):
         return True
     
     now = datetime.now()
-    return (now - last_time) >= timedelta(hours=24)
+    print(f"Debug - now: {now}, last_time: {last_time}, SEND_INTERVAL: {SEND_INTERVAL}")
+    print(f"❗️❗️{(now - last_time) >= SEND_INTERVAL}")
+    return (now - last_time) >= SEND_INTERVAL
 
 async def send_word_to_user(user_id, force=False):
     """Send random words from user's selected lists"""
+    active_users, user_lists = load_active_users_and_lists()
+    print(f"Debug - send_word_to_user called with user_id: {user_id}, force: {force}")
     if user_id not in active_users:
         active_users[user_id] = None
-        user_lists.setdefault(user_id, [DEFAULT_WORDLIST])
+        user_lists.setdefault(user_id, DEFAULT_WORDLIST)
         save_users(active_users, user_lists)
 
-    if not force and not await should_send_word(user_id):
-        time_diff = timedelta(hours=24) - (datetime.now() - active_users[user_id])
-        hours, remainder = divmod(time_diff.seconds, 3600)
-        minutes, _ = divmod(remainder, 60)
-        await bot.send_message(
-            user_id,
-            f"⏳ Please wait {hours}h {minutes}m for your next words.\n"
-            "Or use /skip to get new words immediately!"
-        )
-        return True
-
-    selected_lists = user_lists.get(user_id, [DEFAULT_WORDLIST])
+    selected_lists = user_lists.get(user_id, DEFAULT_WORDLIST)
     current_time = datetime.now()
     success = False
     
     for list_name in selected_lists:
         try:
-            word_list = load_words(list_name)
+            word_list = load_words([list_name])
             word = random.choice(word_list)
             
             await bot.send_message(
@@ -168,17 +170,19 @@ async def send_word_to_user(user_id, force=False):
             success = True
         except Exception as e:
             logging.error(f"Failed to send word from list '{list_name}' to {user_id}: {e}")
-    
+   
     if success:
         active_users[user_id] = current_time
+        print(f"❗️❗️❗️❗️❗️❗️{active_users[user_id]}")
         save_users(active_users, user_lists)
         
     return success
 
 async def send_daily_word():
     """Send a random word to all users who haven't received one in 24 hours"""
+    active_users, user_lists = load_active_users_and_lists()
     if not active_users:
-        return
+        return 
     
     for user_id in list(active_users.keys()):
         if await should_send_word(user_id):
@@ -190,6 +194,7 @@ async def send_daily_word():
 @dp.message(Command('skip'))
 async def skip_word(message: types.Message):
     """Skip current word and get a new one"""
+    active_users, user_lists = load_active_users_and_lists()
     user_id = message.from_user.id
     if user_id not in active_users and user_id not in user_lists:
         await message.reply("You're not subscribed! Use /start first.")
@@ -200,21 +205,13 @@ async def skip_word(message: types.Message):
 @dp.message(Command('start'))
 async def send_welcome(message: types.Message):
     user_id = message.from_user.id
+    active_users, user_lists = load_active_users_and_lists()
     
     print(f"Start command received. Current user_lists: {user_lists}")  # Debug print
     print(f"User {user_id} exists in lists: {user_id in user_lists}")  # Debug print
     
-    # Only initialize if user doesn't exist in either dictionary
-    if user_id not in user_lists:
-        print(f"New user {user_id}, initializing with default list")  # Debug print
-        user_lists[user_id] = [DEFAULT_WORDLIST]
-        active_users[user_id] = None
-        save_users(active_users, user_lists)
-    else:
-        print(f"Existing user {user_id}, preserving lists: {user_lists[user_id]}")  # Debug print
-        # Just update active status
-        active_users[user_id] = None
-        save_users(active_users, user_lists)
+    available_lists = get_available_wordlists()
+    available_lists_text = "\n".join(f"• {lst}" for lst in sorted(available_lists))
     
     await message.reply(
         "Hello! I'm your Daily Word Bot. 📚\n"
@@ -225,46 +222,59 @@ async def send_welcome(message: types.Message):
         "/lists - Show your active lists\n"
         "/addlist <name> - Add a list\n"
         "/remlist <name> - Remove a list\n"
-        "/wordlists - Show all available lists\n"
-        "/list - Show words in current list"
+        "/list - Show words in current list\n\n"
+        "Available lists\n"
+        f"{available_lists_text}\n"
+        "Use /addlist <list_name> to add a list."
+        "Use /remlist <list_name> to remove a list."
     )
-    
-    await send_word_to_user(user_id)
+
+    # Only initialize if user doesn't exist in either dictionary
+    if user_id not in user_lists:
+        print(f"New user {user_id}, initializing with default list")  # Debug print
+        user_lists[user_id] = DEFAULT_WORDLIST
+        active_users[user_id] = None
+        save_users(active_users, user_lists)
+
+        await send_word_to_user(user_id)
+
+    else:
+        print(f"Debug - active_users[user_id]: {active_users[user_id]}")
+        time_diff = SEND_INTERVAL - (datetime.now() - active_users[user_id])
+        hours, remainder = divmod(time_diff.seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        if hours == 0 and minutes == 0 and seconds == 0:
+            await message.reply(
+                "⏳ Please wait about 5 minutes for your next words.\n"
+                "Or use /skip to get new words immediately!"
+            )
+        else:
+            await message.reply(
+                f"⏳ Please wait {hours}h {minutes}m {seconds}s for your next words.\n"
+                "Or use /skip to get new words immediately!"
+            )
+
 
 @dp.message(Command('stop'))
 async def stop_notifications(message: types.Message):
     user_id = message.from_user.id
+    active_users, user_lists = load_active_users_and_lists()
     if user_id in active_users:
         del active_users[user_id]
         save_users(active_users, user_lists)
     await message.reply("You've been unsubscribed from daily words. Use /start to subscribe again.")
 
-@dp.message(Command('wordlists'))
-async def list_wordlists(message: types.Message):
-    """Show available word lists"""
-    available_lists = get_available_wordlists()
-    if not available_lists:
-        await message.reply("No word lists found!")
-        return
-    
-    lists_text = "\n".join(
-        f"• {lst}" + (" (current)" if lst == current_list_name else "")
-        for lst in sorted(available_lists)
-    )
-    await message.reply(
-        f"📚 Available word lists:\n\n{lists_text}\n\n"
-        "Use /setlist <name> to switch lists"
-    )
 
 @dp.message(Command('lists'))
 async def show_my_lists(message: types.Message):
     """Show user's active word lists"""
+    active_users, user_lists = load_active_users_and_lists()
     user_id = message.from_user.id
     if user_id not in active_users and user_id not in user_lists:
         await message.reply("You're not subscribed! Use /start first.")
         return
 
-    selected_lists = user_lists.get(user_id, [DEFAULT_WORDLIST])
+    selected_lists = user_lists.get(user_id, DEFAULT_WORDLIST)
     available_lists = get_available_wordlists()
     
     active_text = "\n".join(f"• {lst}" for lst in sorted(selected_lists))
@@ -284,12 +294,13 @@ async def show_my_lists(message: types.Message):
 @dp.message(Command('addlist'))
 async def add_list(message: types.Message, command: CommandObject):
     """Add a word list to user's active lists"""
+    active_users, user_lists = load_active_users_and_lists()
     user_id = message.from_user.id
     available_lists = get_available_wordlists()
     
     # If no list name provided, show available lists
     if not command.args:
-        user_active_lists = user_lists.get(user_id, [DEFAULT_WORDLIST])
+        user_active_lists = user_lists.get(user_id, DEFAULT_WORDLIST)
         available_text = "\n".join(
             f"• {lst}" + (" (active)" if lst in user_active_lists else "")
             for lst in sorted(available_lists)
@@ -311,7 +322,7 @@ async def add_list(message: types.Message, command: CommandObject):
         return
     
     if user_id not in user_lists:
-        user_lists[user_id] = [DEFAULT_WORDLIST]
+        user_lists[user_id] = DEFAULT_WORDLIST
     
     if list_name not in user_lists[user_id]:
         user_lists[user_id].append(list_name)
@@ -325,6 +336,7 @@ async def add_list(message: types.Message, command: CommandObject):
 @dp.message(Command('remlist'))
 async def remove_list(message: types.Message, command: CommandObject):
     """Remove a word list from user's active lists"""
+    active_users, user_lists = load_active_users_and_lists()
     user_id = message.from_user.id
     if user_id not in active_users and user_id not in user_lists:
         await message.reply("You're not subscribed! Use /start first.")
@@ -351,6 +363,7 @@ async def remove_list(message: types.Message, command: CommandObject):
 @dp.message(Command('list'))
 async def show_list_words(message: types.Message, command: CommandObject):
     """Show words in a specified list or user's active lists"""
+    active_users, user_lists = load_active_users_and_lists()
     user_id = message.from_user.id
     
     # If list name provided, show that specific list
@@ -367,7 +380,7 @@ async def show_list_words(message: types.Message, command: CommandObject):
             return
             
         try:
-            words = load_words(list_name)
+            words = load_words([list_name])
             words_text = "\n".join(f"• {word}" for word in sorted(words))
             
             # Split message if it's too long
@@ -388,10 +401,10 @@ async def show_list_words(message: types.Message, command: CommandObject):
             await message.reply("You're not subscribed! Use /start first.")
             return
             
-        selected_lists = user_lists.get(user_id, [DEFAULT_WORDLIST])
+        selected_lists = user_lists.get(user_id, DEFAULT_WORDLIST)
         for list_name in selected_lists:
             try:
-                words = load_words(list_name)
+                words = load_words([list_name])
                 words_text = "\n".join(f"• {word}" for word in sorted(words[:20]))
                 await message.reply(
                     f"📚 Sample words from '{list_name}' (first 20):\n\n{words_text}\n\n"
@@ -403,11 +416,15 @@ async def show_list_words(message: types.Message, command: CommandObject):
 @dp.message()
 async def handle_any_message(message: types.Message):
     """Handle any unrecognized message or command"""
+    active_users, user_lists = load_active_users_and_lists()
     user_id = message.from_user.id
     if user_id not in active_users and user_id not in user_lists:
         await message.reply("You're not subscribed! Use /start first.")
         return
     
+    available_lists = get_available_wordlists()
+    available_lists_text = "\n".join(f"• {lst}" for lst in sorted(available_lists))
+
     await message.reply(
         "Available commands:\n"
         "/stop - Unsubscribe from daily words\n"
@@ -415,14 +432,17 @@ async def handle_any_message(message: types.Message):
         "/lists - Show your active lists\n"
         "/addlist <name> - Add a list\n"
         "/remlist <name> - Remove a list\n"
-        "/wordlists - Show all available lists\n"
-        "/list - Show words in current list"
+        "/list - Show words in current list\n\n"
+        "Available lists\n"
+        f"{available_lists_text}\n"
+        "Use /addlist <list_name> to add a list.\n"
+        "Use /remlist <list_name> to remove a list."
     )
 
 async def main():
     # Initialize scheduler
     scheduler = AsyncIOScheduler()
-    scheduler.add_job(send_daily_word, 'interval', hours=24)
+    scheduler.add_job(send_daily_word, 'interval', seconds=300)
     scheduler.start()
     
     # Delete webhook before polling
