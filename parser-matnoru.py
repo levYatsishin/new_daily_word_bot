@@ -1,8 +1,12 @@
 import requests
 from bs4 import BeautifulSoup
+import time
 
 def fetch_html_from_url(url):
-    response = requests.get(url)
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+    }
+    response = requests.get(url, headers=headers)
     if response.status_code == 200:
         return response.text
     else:
@@ -82,6 +86,7 @@ def fetch_and_parse_pages(base_url, page_count):
     for page in range(1, page_count + 1):
         url = f"{base_url}?page={page}"
         print(f"Fetching URL: {url}")
+        time.sleep(2)  # Wait 2 seconds between requests to reduce suspicion
         html_page = fetch_html_from_url(url)
         parsed_data = parse_html_blocks(html_page)
         all_parsed_data.extend(parsed_data)
@@ -95,7 +100,7 @@ def format_blocks_to_strings(parsed_data):
 
         if len(main_message_parts) >= 3:
             formatted_string = (
-                f"{main_message_parts[0]} (произносится “{main_message_parts[1]}“) – {main_message_parts[2]}. {language}"
+                f"{main_message_parts[0]} (произносится {main_message_parts[1]}) – {main_message_parts[2]}. {language}"
             )
             formatted_strings.append(formatted_string)
     return formatted_strings

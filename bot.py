@@ -24,7 +24,7 @@ dp = Dispatcher()
 # Constants
 WORDLISTS_DIR = "wordlists"
 DEFAULT_WORDLIST = ["swear", "fenia"] 
-SEND_INTERVAL = timedelta(hours=24)  # Define the interval for sending new messages
+SEND_INTERVAL = timedelta(minutes=10)  # Define the interval for sending new messages
 
 def get_available_wordlists():
     """Get list of available word list files"""
