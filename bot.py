@@ -5,6 +5,7 @@ import json
 import os
 from datetime import datetime, timedelta
 import time
+import pytz
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command, CommandObject
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -24,8 +25,11 @@ dp = Dispatcher()
 
 # Constants
 WORDLISTS_DIR = "wordlists"
-DEFAULT_WORDLIST = ["swear", "fenia"] 
-SEND_INTERVAL = timedelta(minutes=10)  # Define the interval for sending new messages
+DEFAULT_WORDLIST = ["swear", "fenia"]
+# SEND_INTERVAL = timedelta(minutes=10)  # Define the interval for sending new messages
+SEND_INTERVAL = timedelta(hours=24)  # Define the interval for sending new messages
+moscow_tz = pytz.timezone('Europe/Moscow')
+
 
 def get_available_wordlists():
     """Get list of available word list files"""
@@ -140,7 +144,7 @@ async def should_send_word(user_id):
     if last_time is None:
         return True
     
-    now = datetime.now()
+    now = datetime.now(moscow_tz)
     print(f"Debug - now: {now}, last_time: {last_time}, SEND_INTERVAL: {SEND_INTERVAL}")
     print(f"{(now - last_time) >= SEND_INTERVAL}")
     return (now - last_time) >= SEND_INTERVAL
@@ -155,7 +159,7 @@ async def send_word_to_user(user_id, force=False):
         save_users(active_users, user_lists)
 
     selected_lists = user_lists.get(user_id, DEFAULT_WORDLIST)
-    current_time = datetime.now()
+    current_time = datetime.now(moscow_tz)
     success = False
     
     for list_name in selected_lists:
@@ -227,7 +231,7 @@ async def send_welcome(message: types.Message):
         "/list - Show words in current list\n\n"
         "Available lists\n"
         f"{available_lists_text}\n"
-        "Use /addlist <list_name> to add a list."
+        "Use /addlist <list_name> to add a list.\n"
         "Use /remlist <list_name> to remove a list."
     )
 
@@ -242,7 +246,7 @@ async def send_welcome(message: types.Message):
 
     else:
         print(f"Debug - active_users[user_id]: {active_users[user_id]}")
-        time_diff = SEND_INTERVAL - (datetime.now() - active_users[user_id])
+        time_diff = SEND_INTERVAL - (datetime.now(moscow_tz) - active_users[user_id])
         hours, remainder = divmod(time_diff.seconds, 3600)
         minutes, seconds = divmod(remainder, 60)
         if hours == 0 and minutes == 0 and seconds == 0:

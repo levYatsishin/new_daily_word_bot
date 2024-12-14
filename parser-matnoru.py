@@ -121,4 +121,3 @@ formatted_strings = format_blocks_to_strings(parsed_data)
 save_strings_to_file(formatted_strings, "output.txt")
 
 print("Formatted strings have been saved to output.txt")
-
