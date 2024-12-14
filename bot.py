@@ -246,7 +246,7 @@ async def send_welcome(message: types.Message):
 
     else:
         print(f"Debug - active_users[user_id]: {active_users[user_id]}")
-        time_diff = SEND_INTERVAL - (datetime.now(moscow_tz) - active_users[user_id])
+        time_diff = SEND_INTERVAL - (datetime.now(moscow_tz) - active_users[user_id].astimezone(moscow_tz))
         hours, remainder = divmod(time_diff.seconds, 3600)
         minutes, seconds = divmod(remainder, 60)
         if hours == 0 and minutes == 0 and seconds == 0:
